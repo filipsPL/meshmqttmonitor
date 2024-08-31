@@ -1,0 +1,25 @@
+# Define MQTT settings
+MQTT_BROKER = "mqtt.broker.site"  # Replace with your MQTT broker address
+MQTT_PORT = 8883
+MQTT_TOPIC = "msh/PL/2/json/#"
+MQTT_USERNAME = "meshuser"  # Replace with your MQTT username
+MQTT_PASSWORD = "mesgpassword"  # Replace with your MQTT password
+
+# SSL Usage
+USE_SSL = True
+
+# Alias mapping for node IDs to human-readable names
+ALIAS_MAP = {
+    "!da5aed8d": "mynode-01",
+    "!d2c31be8": "mynode-02",
+    "!d2dd2ad8": "mynode-03",
+}
+
+# Color mapping for aliases
+COLOR_MAP = {
+    "mynode-01": "yellow",
+    "mynode-02": "cyan",
+    "mynode-03": "green",
+}
+
+IGNORE_FIELDS = ['from', 'to', 'type', 'id', 'timestamp', 'node_id', 'node_broadcast_interval_secs']
