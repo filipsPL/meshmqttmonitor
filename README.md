@@ -87,4 +87,3 @@ Ensure that the `config.py` file is in the same directory as your script. The fi
 ## License
 
 This project is licensed under the MIT License.
-
