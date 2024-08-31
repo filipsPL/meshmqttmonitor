@@ -15,7 +15,22 @@ node_data = {}
 last_update_time = None
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code " + str(rc))
+    if rc == 0:
+        print("Connected to MQTT Broker! Waiting for the first message.")
+        client.subscribe(MQTT_TOPIC)
+    else:
+        print(f"Failed to connect, return code {rc}")
+
+def on_disconnect(client, userdata, rc):
+    print("Disconnected from MQTT Broker. Attempting to reconnect...")
+    while True:
+        try:
+            client.reconnect()
+            print("Reconnected to MQTT Broker!")
+            break
+        except:
+            print("Reconnection failed. Retrying in 5 seconds...")
+            time.sleep(5)
 
 # Function to clear the screen
 def clear_screen():
@@ -145,6 +160,7 @@ clear_screen()
 # MQTT setup
 client = mqtt.Client()
 client.on_connect = on_connect
+client.on_disconnect = on_disconnect
 client.on_message = on_message
 
 # Set username and password if necessary
@@ -153,6 +169,9 @@ client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 if USE_SSL:
     client.tls_set(cert_reqs=ssl.CERT_NONE)
     client.tls_insecure_set(True)
+
+# Set the reconnection delay
+client.reconnect_delay_set(min_delay=1, max_delay=120)
 
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
 client.subscribe(MQTT_TOPIC)
