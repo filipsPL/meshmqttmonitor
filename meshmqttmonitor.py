@@ -13,28 +13,48 @@ from config import MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, MQTT_USERNAME, MQTT_PASSW
 # Initialize a dictionary to hold the last message for each type and node
 node_data = {}
 last_update_time = None
+nodes_db = {}
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("Connected to MQTT Broker! Waiting for the first message.")
+        display_data()
+        print(f"{colored('●', 'green')} Connected to MQTT Broker! Waiting for the first message.")
         client.subscribe(MQTT_TOPIC)
     else:
-        print(f"Failed to connect, return code {rc}")
+        print(f"{colored('●', 'red')} Failed to connect, return code {rc}")
 
 def on_disconnect(client, userdata, rc):
     print("Disconnected from MQTT Broker. Attempting to reconnect...")
     while True:
         try:
             client.reconnect()
-            print("Reconnected to MQTT Broker!")
+            display_data()
+            print(f"{colored('●', 'green')} Reconnected to MQTT Broker!")
             break
         except:
-            print("Reconnection failed. Retrying in 5 seconds...")
+            display_data()
+            print(f"{colored('●', 'red')} Reconnection failed. Retrying in 5 seconds...")
             time.sleep(5)
 
 # Function to clear the screen
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
+
+def nodeDecToStr(value):
+    node_id = f"!{str(hex(value))[2:]}"
+    alias = ALIAS_MAP.get(node_id, node_id)
+    color = COLOR_MAP.get(alias, "white")
+    return colored(alias, color)
+
+def int_to_ascii_bar(value, max_value=7):
+    """
+    Convert an integer (0 to 7) to an ASCII bar representation with '█' and '░'.
+    """
+    if not (0 <= value <= 7):
+        raise ValueError("Input must be an integer between 0 and 7.")
+    
+    tekst = str(value) + ' ' + '█' * value + '░' * (max_value - value)
+    return tekst
 
 # Function to format the message payload as tab-delimited "variable: value" pairs
 def format_message(payload):
@@ -42,12 +62,29 @@ def format_message(payload):
     for key, value in payload.items():
         if key not in IGNORE_FIELDS:
             if key == 'payload':
-                text += "\n".join([f"  - {key2}: {value2}" for key2, value2 in value.items() if key2 not in IGNORE_FIELDS]) + "\n"
+                for key2, value2 in value.items():
+                    # Skip keys that are in the IGNORE_FIELDS list
+                    if key2 in IGNORE_FIELDS:
+                        continue
+                    # Add the formatted string to the text with proper indentation and a newline
+                    if key2 == 'time':
+                        received_time_str, circle_color, time_ago_str = format_timestamp(value2)
+                        value2 = f"{colored('●', circle_color)} {time_ago_str}"
+                    elif key2 in ['node_id', 'last_sent_by_id']: # 
+                        value2 = nodeDecToStr(value2)
+                    
+                    text += f"  - {key2}: {value2}\n"
+
             elif key == 'sender':
                 sender = ALIAS_MAP.get(value, value)
             elif key == 'channel':
                 channel = value
             else:
+                # formatting of other elements
+                if key in ['from', 'to', 'last_sent_by_id']:
+                    value = nodeDecToStr(value)
+                elif key == 'hop_start' or key == 'hops_away':
+                    value = int_to_ascii_bar(value)
                 text += f"{key}: {value}\n"
     return sender, channel, text
 
@@ -69,18 +106,24 @@ def get_circle_color(seconds_ago):
         return 'red'
     elif seconds_ago < 3600:  # 30 to 60 minutes ago
         return 'light_red'
-    elif seconds_ago < 7200:  # 1 to 2 hours ago
-        return 'purple'
     else:  # more than 2 hours ago
-        return 'black'
+        return 'white'
 
+
+def format_timestamp(received_timestamp):
+    received_time = datetime.fromtimestamp(received_timestamp)
+    current_time = datetime.now()
+    time_ago = (current_time - received_time).total_seconds()
+    circle_color = get_circle_color(time_ago)
+    time_ago_str = f"{int(time_ago)} seconds ago"
+    received_time_str = f"{received_time.strftime('%Y-%m-%d %H:%M:%S')}\n{colored('●', circle_color)} {time_ago_str}"
+    return received_time_str, circle_color, time_ago_str
 
 # Function to display the data in a table format using tabulate
 def display_data():
     clear_screen()
     global last_update_time
-    current_time = datetime.now()
-
+    
     # Display MQTT topic, broker, and last update time at the top
     if last_update_time:
         last_update_msg = f"Last Update: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -107,11 +150,7 @@ def display_data():
         received_timestamp = latest_message.get('timestamp', None)
 
         if received_timestamp is not None:
-            received_time = datetime.fromtimestamp(received_timestamp)
-            time_ago = (current_time - received_time).total_seconds()
-            circle_color = get_circle_color(time_ago)
-            time_ago_str = f"{int(time_ago)} seconds ago"
-            received_time_str = f"{received_time.strftime('%Y-%m-%d %H:%M:%S')}\n{colored('●', circle_color)} {time_ago_str}"
+            received_time_str, circle_color, time_ago_str = format_timestamp(received_timestamp)
         else:
             circle_color = 'black'
             time_ago_str = "unknown"
@@ -129,16 +168,27 @@ def display_data():
             second_column = f"{msg_type.upper()}\n\n    #{channel}"
             table_data.append([first_column, second_column, formatted_message, received_time_str])
 
+            # extract values from payloads
+            # nodeinfo {'channel': 0, 'from': 1127978684, 'hop_start': 2, 'hops_away': 1, 'id': 3624383877, 'payload': {'hardware': 49, 'id': '!433b96bc', 'longname': 'Kraina Grzybow | Wwa', 'role': 0, 'shortname': 'KG01'}, 'rssi': -122, 'sender': '!da5acdf4', 'snr': -3.25, 'timestamp': 1736353184, 'to': 3175513948, 'type': 'nodeinfo'}
+            if msg_type == 'nodeinfo':
+                # node_id = nodeDecToStr(content['from'])
+                node_id = content['payload']['id']
+                node_name = content['payload']['longname']
+                nodes_db[node_id] = node_name
+
+
     print("\n".join(summary_line))
     print("\n\n")
     print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
+    print(nodes_db)
+    
 
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
     global last_update_time
     try:
-        payload = json.loads(msg.payload.decode())
+        payload = json.loads(msg.payload)
         msg_type = payload.get("type", "unknown")
         node_id = payload.get("sender", "unknown")
 
@@ -171,7 +221,7 @@ if USE_SSL:
     client.tls_insecure_set(True)
 
 # Set the reconnection delay
-client.reconnect_delay_set(min_delay=1, max_delay=120)
+client.reconnect_delay_set(min_delay=1, max_delay=30)
 
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
 client.subscribe(MQTT_TOPIC)
