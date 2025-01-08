@@ -8,20 +8,34 @@ from datetime import datetime
 from tabulate import tabulate
 
 # Import configuration variables from config.py
-from config import MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, MQTT_USERNAME, MQTT_PASSWORD, USE_SSL, ALIAS_MAP, COLOR_MAP, IGNORE_FIELDS
+from config import (
+    MQTT_BROKER,
+    MQTT_PORT,
+    MQTT_TOPIC,
+    MQTT_USERNAME,
+    MQTT_PASSWORD,
+    USE_SSL,
+    ALIAS_MAP,
+    COLOR_MAP,
+    IGNORE_FIELDS,
+)
 
 # Initialize a dictionary to hold the last message for each type and node
 node_data = {}
 last_update_time = None
 nodes_db = {}
 
+
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         display_data()
-        print(f"{colored('●', 'green')} Connected to MQTT Broker! Waiting for the first message.")
+        print(
+            f"{colored('●', 'green')} Connected to MQTT Broker! Waiting for the first message."
+        )
         client.subscribe(MQTT_TOPIC)
     else:
         print(f"{colored('●', 'red')} Failed to connect, return code {rc}")
+
 
 def on_disconnect(client, userdata, rc):
     print("Disconnected from MQTT Broker. Attempting to reconnect...")
@@ -33,12 +47,16 @@ def on_disconnect(client, userdata, rc):
             break
         except:
             display_data()
-            print(f"{colored('●', 'red')} Reconnection failed. Retrying in 5 seconds...")
+            print(
+                f"{colored('●', 'red')} Reconnection failed. Retrying in 5 seconds..."
+            )
             time.sleep(5)
+
 
 # Function to clear the screen
 def clear_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    os.system("cls" if os.name == "nt" else "clear")
+
 
 def nodeDecToStr(value):
     node_id = f"!{str(hex(value))[2:]}"
@@ -46,68 +64,67 @@ def nodeDecToStr(value):
     color = COLOR_MAP.get(alias, "white")
     return colored(alias, color)
 
+
 def int_to_ascii_bar(value, max_value=7):
-    """
-    Convert an integer (0 to 7) to an ASCII bar representation with '█' and '░'.
-    """
-    if not (0 <= value <= 7):
-        raise ValueError("Input must be an integer between 0 and 7.")
-    
-    tekst = str(value) + ' ' + '█' * value + '░' * (max_value - value)
+    tekst = str(value) + " " + "█" * value + "░" * (max_value - value)
     return tekst
+
 
 # Function to format the message payload as tab-delimited "variable: value" pairs
 def format_message(payload):
     text = ""
     for key, value in payload.items():
         if key not in IGNORE_FIELDS:
-            if key == 'payload':
+            if key == "payload":
                 for key2, value2 in value.items():
                     # Skip keys that are in the IGNORE_FIELDS list
                     if key2 in IGNORE_FIELDS:
                         continue
                     # Add the formatted string to the text with proper indentation and a newline
-                    if key2 == 'time':
-                        received_time_str, circle_color, time_ago_str = format_timestamp(value2)
+                    if key2 == "time":
+                        received_time_str, circle_color, time_ago_str = (
+                            format_timestamp(value2)
+                        )
                         value2 = f"{colored('●', circle_color)} {time_ago_str}"
-                    elif key2 in ['node_id', 'last_sent_by_id']: # 
+                    elif key2 in ["node_id", "last_sent_by_id"]:  #
                         value2 = nodeDecToStr(value2)
-                    
+
                     text += f"  - {key2}: {value2}\n"
 
-            elif key == 'sender':
+            elif key == "sender":
                 sender = ALIAS_MAP.get(value, value)
-            elif key == 'channel':
+            elif key == "channel":
                 channel = value
             else:
                 # formatting of other elements
-                if key in ['from', 'to', 'last_sent_by_id']:
+                if key in ["from", "to", "last_sent_by_id"]:
                     value = nodeDecToStr(value)
-                elif key == 'hop_start' or key == 'hops_away':
+                elif key == "hop_start" or key == "hops_away":
                     value = int_to_ascii_bar(value)
                 text += f"{key}: {value}\n"
     return sender, channel, text
 
+
 # Function to calculate the color of the circle based on message age
 def get_circle_color(seconds_ago):
     if seconds_ago < 60:  # less than 1 minute ago
-        return 'green'
+        return "green"
     elif seconds_ago < 120:  # 1 to 2 minutes ago
-        return 'light_green'
+        return "light_green"
     elif seconds_ago < 300:  # 2 to 5 minutes ago
-        return 'yellow'
+        return "yellow"
     elif seconds_ago < 600:  # 5 to 10 minutes ago
-        return 'light_yellow'
+        return "light_yellow"
     elif seconds_ago < 900:  # 10 to 15 minutes ago
-        return 'magenta'
+        return "magenta"
     elif seconds_ago < 1200:  # 15 to 20 minutes ago
-        return 'light_magenta'
+        return "light_magenta"
     elif seconds_ago < 1800:  # 20 to 30 minutes ago
-        return 'red'
+        return "red"
     elif seconds_ago < 3600:  # 30 to 60 minutes ago
-        return 'light_red'
+        return "light_red"
     else:  # more than 2 hours ago
-        return 'white'
+        return "white"
 
 
 def format_timestamp(received_timestamp):
@@ -119,21 +136,28 @@ def format_timestamp(received_timestamp):
     received_time_str = f"{received_time.strftime('%Y-%m-%d %H:%M:%S')}\n{colored('●', circle_color)} {time_ago_str}"
     return received_time_str, circle_color, time_ago_str
 
+
 # Function to display the data in a table format using tabulate
 def display_data():
     clear_screen()
     global last_update_time
-    
+
     # Display MQTT topic, broker, and last update time at the top
     if last_update_time:
-        last_update_msg = f"Last Update: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        last_update_msg = (
+            f"Last Update: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
     else:
         last_update_msg = "Last Update: N/A\n"
 
-    print(f"MQTT Topic: {MQTT_TOPIC} | Broker: {MQTT_BROKER}:{MQTT_PORT} | {last_update_msg}")
+    print(
+        f"MQTT Topic: {MQTT_TOPIC} | Broker: {MQTT_BROKER}:{MQTT_PORT} | {last_update_msg}"
+    )
 
     # Sort the node_data alphabetically by alias or node_id
-    sorted_node_data = sorted(node_data.items(), key=lambda item: ALIAS_MAP.get(item[0], item[0]))
+    sorted_node_data = sorted(
+        node_data.items(), key=lambda item: ALIAS_MAP.get(item[0], item[0])
+    )
 
     table_data = []
     summary_line = []
@@ -145,43 +169,46 @@ def display_data():
         color = COLOR_MAP.get(alias, "white")
 
         # Determine the latest message
-        latest_message_type = max(messages, key=lambda k: messages[k]['timestamp'])
+        latest_message_type = max(messages, key=lambda k: messages[k]["timestamp"])
         latest_message = messages[latest_message_type]
-        received_timestamp = latest_message.get('timestamp', None)
+        received_timestamp = latest_message.get("timestamp", None)
 
         if received_timestamp is not None:
-            received_time_str, circle_color, time_ago_str = format_timestamp(received_timestamp)
+            received_time_str, circle_color, time_ago_str = format_timestamp(
+                received_timestamp
+            )
         else:
-            circle_color = 'black'
+            circle_color = "black"
             time_ago_str = "unknown"
             received_time_str = "unknown"
 
         # Print summary line
         # summary_line = f"{colored(alias, color)}: Last message {latest_message_type.upper()} | {colored('●', circle_color)} {time_ago_str}"
-        summary_line.append(f"{colored(alias, color)}: {colored('●', circle_color)} {time_ago_str}")
-
+        summary_line.append(
+            f"{colored(alias, color)}: {colored('●', circle_color)} {time_ago_str}"
+        )
 
         # Build detailed table data
         for msg_type, content in messages.items():
             sender, channel, formatted_message = format_message(content)
             first_column = f"{colored(alias, color)}\n    🡅\n{colored(sender, color)}"
             second_column = f"{msg_type.upper()}\n\n    #{channel}"
-            table_data.append([first_column, second_column, formatted_message, received_time_str])
+            table_data.append(
+                [first_column, second_column, formatted_message, received_time_str]
+            )
 
             # extract values from payloads
             # nodeinfo {'channel': 0, 'from': 1127978684, 'hop_start': 2, 'hops_away': 1, 'id': 3624383877, 'payload': {'hardware': 49, 'id': '!433b96bc', 'longname': 'Kraina Grzybow | Wwa', 'role': 0, 'shortname': 'KG01'}, 'rssi': -122, 'sender': '!da5acdf4', 'snr': -3.25, 'timestamp': 1736353184, 'to': 3175513948, 'type': 'nodeinfo'}
-            if msg_type == 'nodeinfo':
+            if msg_type == "nodeinfo":
                 # node_id = nodeDecToStr(content['from'])
-                node_id = content['payload']['id']
-                node_name = content['payload']['longname']
+                node_id = content["payload"]["id"]
+                node_name = content["payload"]["longname"]
                 nodes_db[node_id] = node_name
-
 
     print("\n".join(summary_line))
     print("\n\n")
     print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
     print(nodes_db)
-    
 
 
 # Callback when a message is received
@@ -204,6 +231,7 @@ def on_message(client, userdata, msg):
         print(f"Failed to decode JSON message: {str(e)}")
     except Exception as e:
         print(f"Error processing message: {str(e)}")
+
 
 clear_screen()
 
