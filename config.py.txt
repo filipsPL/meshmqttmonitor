@@ -20,6 +20,7 @@ COLOR_MAP = {
     "mynode-01": "yellow",
     "mynode-02": "cyan",
     "mynode-03": "green",
+    # see https://pypi.org/project/termcolor/ for color aliases
 }
 
 IGNORE_FIELDS = ['from', 'to', 'type', 'id', 'timestamp', 'node_id', 'node_broadcast_interval_secs']
