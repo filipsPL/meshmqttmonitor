@@ -6,6 +6,7 @@ import time
 from termcolor import colored
 from datetime import datetime
 from tabulate import tabulate
+import pickle
 
 # Import configuration variables from config.py
 from config import (
@@ -23,7 +24,30 @@ from config import (
 # Initialize a dictionary to hold the last message for each type and node
 node_data = {}
 last_update_time = None
-nodes_db = {}
+ALIAS_MAP_WITH_NEW = ALIAS_MAP.copy()
+
+
+def load_nodes_db(file_path="nodes_db.pkl"):
+    """
+    Loads the `nodes_db` dictionary from a pickle file if it exists.
+    
+    Parameters:
+        file_path (str): Path to the pickle file.
+    
+    Returns:
+        dict: The loaded `nodes_db` dictionary or an empty dictionary if the file does not exist or fails to load.
+    """
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "rb") as file:
+                nodes_db = pickle.load(file)
+                return nodes_db
+        except Exception as e:
+            print(f"Error loading nodes_db from file: {e}")
+    else:
+        print(f"{file_path} does not exist. Starting with an empty nodes_db.")
+    
+    return {}  # Return an empty dictionary if the file doesn't exist or fails to load
 
 
 def on_connect(client, userdata, flags, rc):
@@ -60,7 +84,7 @@ def clear_screen():
 
 def nodeDecToStr(value):
     node_id = f"!{str(hex(value))[2:]}"
-    alias = ALIAS_MAP.get(node_id, node_id)
+    alias = ALIAS_MAP_WITH_NEW.get(node_id, node_id)
     color = COLOR_MAP.get(alias, "white")
     return colored(alias, color)
 
@@ -92,7 +116,7 @@ def format_message(payload):
                     text += f"  - {key2}: {value2}\n"
 
             elif key == "sender":
-                sender = ALIAS_MAP.get(value, value)
+                sender = ALIAS_MAP_WITH_NEW.get(value, value)
             elif key == "channel":
                 channel = value
             else:
@@ -137,36 +161,83 @@ def format_timestamp(received_timestamp):
     return received_time_str, circle_color, time_ago_str
 
 
-# Function to display the data in a table format using tabulate
+
+import pickle
+
+def update_nodes_db(messages, file_path="nodes_db.pkl"):
+    """
+    Updates the global `nodes_db` dictionary with data from `nodeinfo` messages
+    and saves the updated dictionary to a pickle file only if a new record is added.
+    
+    Parameters:
+        messages (dict): A dictionary of messages for a node.
+        file_path (str): Path to the pickle file where `nodes_db` is saved.
+    """
+    global nodes_db
+    is_updated = False  # Track if the dictionary is updated
+
+    # Update nodes_db with new nodeinfo data
+    for msg_type, content in messages.items():
+        if msg_type == "nodeinfo":
+            node_id = content["payload"].get("id", "unknown")
+            node_name = content["payload"].get("longname", "Unnamed Node")
+
+            # Check if the node_id is new or has a different name
+            if node_id not in nodes_db or nodes_db[node_id] != node_name:
+                nodes_db[node_id] = node_name
+                is_updated = True  # Mark as updated
+
+    # Save the updated nodes_db to a pickle file only if changes were made
+    if is_updated:
+        try:
+            with open(file_path, "wb") as file:
+                pickle.dump(nodes_db, file)
+            # print(f"nodes_db successfully updated and saved to {file_path}")
+        except Exception as e:
+            print(f"Error saving nodes_db to file: {e}")
+    # else:
+    #     # print("No changes made to nodes_db. Pickle file not saved.")
+
+
+
 def display_data():
+    """
+    Display MQTT topic, broker details, last update time,
+    and a summary of node data in a tabulated format.
+    """
     clear_screen()
-    global last_update_time
+    global last_update_time, ALIAS_MAP_WITH_NEW, nodes_db
 
     # Display MQTT topic, broker, and last update time at the top
-    if last_update_time:
-        last_update_msg = (
-            f"Last Update: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        )
-    else:
-        last_update_msg = "Last Update: N/A\n"
+    last_update_msg = (
+        f"Last Update: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        if last_update_time
+        else "Last Update: N/A\n"
+    )
 
     print(
         f"MQTT Topic: {MQTT_TOPIC} | Broker: {MQTT_BROKER}:{MQTT_PORT} | {last_update_msg}"
     )
 
-    # Sort the node_data alphabetically by alias or node_id
+    # Merge `nodes_db` and `ALIAS_MAP` to update aliases
+    ALIAS_MAP_WITH_NEW = {**nodes_db, **ALIAS_MAP}
+
+    # Sort node data alphabetically by alias or node_id
     sorted_node_data = sorted(
-        node_data.items(), key=lambda item: ALIAS_MAP.get(item[0], item[0])
+        node_data.items(), key=lambda item: ALIAS_MAP_WITH_NEW.get(item[0], item[0])
     )
 
     table_data = []
-    summary_line = []
+    summary_lines = []
     headers = ["Nodes", "Message Type / Channel", "Last Message", "Received Time"]
 
     # Single loop to create summary and detailed table
     for node_id, messages in sorted_node_data:
-        alias = ALIAS_MAP.get(node_id, node_id)
+        alias = ALIAS_MAP_WITH_NEW.get(node_id, node_id)
         color = COLOR_MAP.get(alias, "white")
+
+        # Update `nodes_db` with `nodeinfo` messages
+        update_nodes_db(messages)
 
         # Determine the latest message
         latest_message_type = max(messages, key=lambda k: messages[k]["timestamp"])
@@ -178,13 +249,10 @@ def display_data():
                 received_timestamp
             )
         else:
-            circle_color = "black"
-            time_ago_str = "unknown"
-            received_time_str = "unknown"
+            circle_color, time_ago_str, received_time_str = "black", "unknown", "unknown"
 
-        # Print summary line
-        # summary_line = f"{colored(alias, color)}: Last message {latest_message_type.upper()} | {colored('●', circle_color)} {time_ago_str}"
-        summary_line.append(
+        # Add summary line for the node
+        summary_lines.append(
             f"{colored(alias, color)}: {colored('●', circle_color)} {time_ago_str}"
         )
 
@@ -197,25 +265,22 @@ def display_data():
                 [first_column, second_column, formatted_message, received_time_str]
             )
 
-            # extract values from payloads
-            # nodeinfo {'channel': 0, 'from': 1127978684, 'hop_start': 2, 'hops_away': 1, 'id': 3624383877, 'payload': {'hardware': 49, 'id': '!433b96bc', 'longname': 'Kraina Grzybow | Wwa', 'role': 0, 'shortname': 'KG01'}, 'rssi': -122, 'sender': '!da5acdf4', 'snr': -3.25, 'timestamp': 1736353184, 'to': 3175513948, 'type': 'nodeinfo'}
-            if msg_type == "nodeinfo":
-                # node_id = nodeDecToStr(content['from'])
-                node_id = content["payload"]["id"]
-                node_name = content["payload"]["longname"]
-                nodes_db[node_id] = node_name
-
-    print("\n".join(summary_line))
+    # Print summary
+    print("\n".join(summary_lines))
     print("\n\n")
+
+    # Print detailed table
     print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
-    print(nodes_db)
+
+    # print nodedb info:
+    print(f"Node database contains {len(ALIAS_MAP_WITH_NEW)} records.")
 
 
 # Callback when a message is received
 def on_message(client, userdata, msg):
     global last_update_time
     try:
-        payload = json.loads(msg.payload)
+        payload = json.loads(msg.payload.decode('utf-8'))
         msg_type = payload.get("type", "unknown")
         node_id = payload.get("sender", "unknown")
 
@@ -234,6 +299,8 @@ def on_message(client, userdata, msg):
 
 
 clear_screen()
+
+nodes_db = load_nodes_db()
 
 # MQTT setup
 client = mqtt.Client()
