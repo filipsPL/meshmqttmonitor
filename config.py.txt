@@ -5,6 +5,9 @@ MQTT_TOPIC = "msh/PL/2/json/#"
 MQTT_USERNAME = "meshuser"  # Replace with your MQTT username
 MQTT_PASSWORD = "mesgpassword"  # Replace with your MQTT password
 
+# Optional client ID
+# CLIENT_ID = '!da5aed8d'
+
 # SSL Usage
 USE_SSL = True
 
