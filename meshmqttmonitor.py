@@ -28,6 +28,110 @@ try:
 except ImportError:
     CLIENT_ID = None
 
+
+# roles
+
+ROLES = {
+    0: "CLIENT",
+    1: "CLIENT_MUTE",
+    2: "ROUTER",
+    3: "ROUTER_CLIENT",
+    4: "REPEATER",
+    5: "TRACKER",
+    6: "SENSOR",
+    7: "TAK",
+    8: "CLIENT_HIDDEN",
+    9: "LOST_AND_FOUND",
+    10: "TAK_TRACKER",
+}
+
+
+# taken from Liam https://github.com/liamcottle/meshtastic-map/ - thanks!
+HARDWARE = {
+    0: "UNSET",
+    1: "TLORA_V2",
+    2: "TLORA_V1",
+    3: "TLORA_V2_1_1P6",
+    4: "TBEAM",
+    5: "HELTEC_V2_0",
+    6: "TBEAM_V0P7",
+    7: "T_ECHO",
+    8: "TLORA_V1_1P3",
+    9: "RAK4631",
+    10: "HELTEC_V2_1",
+    11: "HELTEC_V1",
+    12: "LILYGO_TBEAM_S3_CORE",
+    13: "RAK11200",
+    14: "NANO_G1",
+    15: "TLORA_V2_1_1P8",
+    16: "TLORA_T3_S3",
+    17: "NANO_G1_EXPLORER",
+    18: "NANO_G2_ULTRA",
+    19: "LORA_TYPE",
+    20: "WIPHONE",
+    21: "WIO_WM1110",
+    22: "RAK2560",
+    23: "HELTEC_HRU_3601",
+    25: "STATION_G1",
+    26: "RAK11310",
+    27: "SENSELORA_RP2040",
+    28: "SENSELORA_S3",
+    29: "CANARYONE",
+    30: "RP2040_LORA",
+    31: "STATION_G2",
+    32: "LORA_RELAY_V1",
+    33: "NRF52840DK",
+    34: "PPR",
+    35: "GENIEBLOCKS",
+    36: "NRF52_UNKNOWN",
+    37: "PORTDUINO",
+    38: "ANDROID_SIM",
+    39: "DIY_V1",
+    40: "NRF52840_PCA10059",
+    41: "DR_DEV",
+    42: "M5STACK",
+    43: "HELTEC_V3",
+    44: "HELTEC_WSL_V3",
+    45: "BETAFPV_2400_TX",
+    46: "BETAFPV_900_NANO_TX",
+    47: "RPI_PICO",
+    48: "HELTEC_WIRELESS_TRACKER",
+    49: "HELTEC_WIRELESS_PAPER",
+    50: "T_DECK",
+    51: "T_WATCH_S3",
+    52: "PICOMPUTER_S3",
+    53: "HELTEC_HT62",
+    54: "EBYTE_ESP32_S3",
+    55: "ESP32_S3_PICO",
+    56: "CHATTER_2",
+    57: "HELTEC_WIRELESS_PAPER_V1_0",
+    58: "HELTEC_WIRELESS_TRACKER_V1_0",
+    59: "UNPHONE",
+    60: "TD_LORAC",
+    61: "CDEBYTE_EORA_S3",
+    62: "TWC_MESH_V4",
+    63: "NRF52_PROMICRO_DIY",
+    64: "RADIOMASTER_900_BANDIT_NANO",
+    65: "HELTEC_CAPSULE_SENSOR_V3",
+    66: "HELTEC_VISION_MASTER_T190",
+    67: "HELTEC_VISION_MASTER_E213",
+    68: "HELTEC_VISION_MASTER_E290",
+    69: "HELTEC_MESH_NODE_T114",
+    70: "SENSECAP_INDICATOR",
+    71: "TRACKER_T1000_E",
+    72: "RAK3172",
+    73: "WIO_E5",
+    74: "RADIOMASTER_900_BANDIT",
+    75: "ME25LS01_4Y10TD",
+    76: "RP2040_FEATHER_RFM95",
+    77: "M5STACK_COREBASIC",
+    78: "M5STACK_CORE2",
+    255: "PRIVATE_HW",
+}
+
+# nlPoint = chr(10)
+nlPoint = "\n • "
+
 # Initialize a dictionary to hold the last message for each type and node
 node_data = {}
 last_update_time = None
@@ -92,17 +196,41 @@ def nodeDecToStr(value):
     return colored(alias, color)
 
 
-def int_to_ascii_bar(value, max_value=7):
+def int_to_ascii_bar(value, max_value=7, size=7):
+    """
+    Create an ASCII bar representing the value as a percentage of max_value.
+
+    Parameters:
+        value (int): The current value to represent.
+        max_value (int): The maximum value for scaling the bar.
+        size (int): The total size (length) of the bar.
+
+    Returns:
+        str: A string representing the bar with the value and percentage.
+    """
+    # Ensure value is within bounds
     if value > max_value:
         value = max_value
+    elif value < 0:
+        value = 0
 
-    tekst = str(value) + " " + "█" * value + "░" * (max_value - value)
+    # Calculate the percentage and scaled value
+    percentage = (value / max_value) * 100 if max_value > 0 else 0
+    scaled_value = int((value / max_value) * size) if max_value > 0 else 0
+
+    # Create the bar
+    bar = "█" * scaled_value + "░" * (size - scaled_value)
+
+    # Format the output with value, percentage, and the bar
+    tekst = f"{value}/{max_value} ({percentage:>5.1f}%) {bar}"
     return tekst
 
 
 # Function to format the message payload as tab-delimited "variable: value" pairs
 def format_message(payload):
     text = ""
+    sender_mesh = ""
+    recipient_mesh = ""
     for key, value in payload.items():
         if key not in IGNORE_FIELDS:
             if key == "payload":
@@ -117,23 +245,60 @@ def format_message(payload):
                             value2 = f"{colored('●', circle_color)} {time_ago_str}"
                         elif key2 in ["node_id", "last_sent_by_id"]:  #
                             value2 = nodeDecToStr(value2)
+                        elif key2 == "role":
+                            value2 = ROLES[int(value2)]
+                        elif key2 == "hardware":
+                            value2 = HARDWARE[int(value2)]
+                        elif key2 == "battery_level":
+                            value2 = int_to_ascii_bar(int(value2), max_value=100, size=5)
+                        elif key2 in ["latitude_i", "longitude_i"]:
+                            value2 = f"{(int(value2) * 1e-7):.5f}º"
+                            key2 = key2[:3]
+                        elif key2 in [
+                            "channel_utilization",
+                            "voltage",
+                            "air_util_tx",
+                            "temperature",
+                            "barometric_pressure",
+                            "relative_humidity",
+                        ]:
+                            # long floats
+                            value2 = f"{value2:.3f}"
+                        elif key2 in ["uptime_seconds"]:
+                            value2 = format_time_human(value2)
+                            key2 = "uptime"
 
-                        text += f"  - {key2}: {value2}\n"
+                        text += f"  • {key2}: {value2}\n"
                 except:
                     text = "error decoding text"
 
             elif key == "sender":
-                sender = ALIAS_MAP_WITH_NEW.get(value, value)
+                sender_mqtt = ALIAS_MAP_WITH_NEW.get(value, value)
             elif key == "channel":
                 channel = value
-            else:
-                # formatting of other elements
-                if key in ["from", "to", "last_sent_by_id"]:
-                    value = nodeDecToStr(value)
-                elif key == "hop_start" or key == "hops_away":
-                    value = int_to_ascii_bar(value)
-                text += f"{key}: {value}\n"
-    return sender, channel, text
+            elif key == "text":
+                # Check if the message is encrypted
+                is_encrypted = payload.get("encrypted", False)
+                value = "*** ENCRYPTED TEXT ***" if is_encrypted else value
+
+            # formatting of other elements
+            elif key in ["last_sent_by_id", "from", "to", "sender"]:
+                value = nodeDecToStr(value)
+            elif key == "hop_start" or key == "hops_away":
+                value = int_to_ascii_bar(value)
+
+            # remove or keep
+            if key not in ["from", "to", "payload", "channel", "sender"]:
+                text += f"{key}: {str(value)[:120]}\n"
+
+            # extract some data
+            if key == 'from':
+                sender_mesh = value
+            elif key == 'to':
+                recipient_mesh = value
+
+
+    return sender_mqtt, channel, text, sender_mesh, recipient_mesh
 
 
 # Function to calculate the color of the circle based on message age
@@ -163,12 +328,35 @@ def format_timestamp(received_timestamp):
     current_time = datetime.now()
     time_ago = (current_time - received_time).total_seconds()
     circle_color = get_circle_color(time_ago)
-    time_ago_str = f"{int(time_ago)} seconds ago"
+    time_ago_str = format_time_human(int(time_ago))
     received_time_str = f"{received_time.strftime('%Y-%m-%d %H:%M:%S')}\n{colored('●', circle_color)} {time_ago_str}"
     return received_time_str, circle_color, time_ago_str
 
 
-import pickle
+def format_time_human(seconds):
+    """
+    Format time into seconds, minutes, hours, days, or weeks based on its value.
+
+    Parameters:
+        seconds (int): Time in seconds.
+
+    Returns:
+        str: A formatted string representing the time in the most appropriate unit.
+    """
+    if seconds < 120:
+        return f"{seconds} s"
+    elif seconds < 3600:
+        minutes = seconds / 60
+        return f"{minutes:.1f} min"
+    elif seconds < 86400:
+        hours = seconds / 3600
+        return f"{hours:.1f} h"
+    elif seconds < 604800:
+        days = seconds / 86400
+        return f"{days:.1f} d"
+    else:
+        weeks = seconds / 604800
+        return f"{weeks:.1f} weeks"
 
 
 def update_nodes_db(messages, file_path="nodes_db.pkl"):
@@ -205,6 +393,19 @@ def update_nodes_db(messages, file_path="nodes_db.pkl"):
     # else:
     #     # print("No changes made to nodes_db. Pickle file not saved.")
 
+def format_node_list_and_times(unique_nodes):
+    # sort by time ascending
+    sorted_nodes_list = dict(sorted(unique_nodes.items(), key=lambda item: item[1], reverse=True))
+
+    # format table
+    nodes_list = []
+    for sender, timestamp in sorted_nodes_list.items():
+        received_time_str, circle_color, time_ago_str = format_timestamp(timestamp)
+        nodes_list.append([f"{colored(sender, circle_color)}", f"{colored('●', circle_color)}", f"{time_ago_str}"])
+
+
+    return tabulate(nodes_list, tablefmt="plain")
+
 
 def display_data():
     """
@@ -224,13 +425,16 @@ def display_data():
     sorted_node_data = sorted(node_data.items(), key=lambda item: ALIAS_MAP_WITH_NEW.get(item[0], item[0]))
 
     table_data = []
-    summary_lines = []
-    headers = ["Nodes", "Message Type / Channel", "Last Message", "Received Time"]
+    unique_nodes_mqtt = {}
+    unique_nodes_mesh = {}
+    node_details = []
+
+    headers = ["MQTT nodes", "Mesh nodes", "Type, channel", "Last Message", "Received"]
 
     # Single loop to create summary and detailed table
     for node_id, messages in sorted_node_data:
-        alias = ALIAS_MAP_WITH_NEW.get(node_id, node_id)
-        color = COLOR_MAP.get(alias, "white")
+        recipient_mqtt = ALIAS_MAP_WITH_NEW.get(node_id, node_id)
+        color = COLOR_MAP.get(recipient_mqtt, "white")
 
         # Update `nodes_db` with `nodeinfo` messages
         update_nodes_db(messages)
@@ -243,6 +447,7 @@ def display_data():
         except:
             pass
 
+        # for summary line
         if received_timestamp is not None:
             received_time_str, circle_color, time_ago_str = format_timestamp(received_timestamp)
         else:
@@ -253,23 +458,40 @@ def display_data():
             )
 
         # Add summary line for the node
-        summary_lines.append(f"{colored(alias, color)}: {colored('●', circle_color)} {time_ago_str}")
+        # summary_lines_mqtt.append([f"{colored(recipient_mqtt, color)}", f"{colored('●', circle_color)}", f"{time_ago_str}"])
+        # if the message is newer than the one in database - replace it
+        unique_nodes_mqtt[recipient_mqtt] = min(unique_nodes_mqtt.get(recipient_mqtt, float('inf')), received_timestamp)
+
 
         # Build detailed table data
         for msg_type, content in messages.items():
             try:
-                sender, channel, formatted_message = format_message(content)
-                first_column = f"{colored(alias, color)}\n    🡅\n{colored(sender, color)}"
-                second_column = f"{msg_type.upper()}\n\n    #{channel}"
-                table_data.append([first_column, second_column, formatted_message, received_time_str])
+                received_timestamp2 = content.get("timestamp", None)
+                if received_timestamp2 is not None:
+                    received_time_str, circle_color, time_ago_str = format_timestamp(received_timestamp2)
+                else:
+                    circle_color, time_ago_str, received_time_str = ("black", "unk", "unk")
+
+                sender_mqtt, channel, formatted_message, sender_mesh, recipient_mesh = format_message(content)
+
+                # if the message is newer than the one in database - replace it
+                unique_nodes_mesh[sender_mesh] = min(unique_nodes_mesh.get(sender_mesh, float('inf')), received_timestamp2)
+
+
+                column1 = f"{colored(sender_mqtt, color)}\n    🡇\n{colored(recipient_mqtt, color)}"
+                column2 = f"{colored(sender_mesh, color)}\n    🡇\n{colored(recipient_mesh, color)}"
+                column3 = f"{msg_type.upper()}\n\n    #{channel}"
+                table_data.append([column1, column2, column3, formatted_message, received_time_str])
             except:
                 pass
 
     # Print detailed table
-    # print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
     column1 = tabulate(table_data, headers=headers, tablefmt="simple_grid")
 
-    column2 = f"MQTT Topic: {MQTT_TOPIC} | Broker: {MQTT_BROKER}:{MQTT_PORT} | {last_update_msg}\n\n{chr(10).join(summary_lines)}\nNode database contains {len(ALIAS_MAP_WITH_NEW)} records."
+    column2 =  f"MQTT Topic: {MQTT_TOPIC} | Broker: {MQTT_BROKER}:{MQTT_PORT} | {last_update_msg}\n"
+    column2 += f"MQTT nodes:\n" + format_node_list_and_times(unique_nodes_mqtt) + "\n\n"
+    column2 += f"Mesh nodes:\n" + format_node_list_and_times(unique_nodes_mesh) + "\n\n"
+    column2 += f"Node database contains {len(ALIAS_MAP_WITH_NEW)} records."
 
     print(tabulate([[column1, column2]], tablefmt="plain"))
 
@@ -279,15 +501,14 @@ def on_message(client, userdata, msg):
     global last_update_time
     try:
         payload = json.loads(msg.payload.decode("ascii", "ignore"))
-        msg_type = payload.get("type", "unknown")
-        node_id = payload.get("sender", "unknown")
+        msg_type = payload.get("type", "unk")
+        node_id = payload.get("sender", "unk")
 
         if node_id not in node_data:
             node_data[node_id] = {}
 
         node_data[node_id][msg_type] = payload
         last_update_time = datetime.now()
-
         # Display the updated data
         display_data()
     except json.JSONDecodeError as e:
