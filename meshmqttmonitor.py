@@ -231,6 +231,7 @@ def format_message(payload):
     text = ""
     sender_mesh = ""
     recipient_mesh = ""
+    sender_mesh_uptime = ""
     for key, value in payload.items():
         if key not in IGNORE_FIELDS:
             if key == "payload":
@@ -267,6 +268,7 @@ def format_message(payload):
                         elif key2 in ["uptime_seconds"]:
                             value2 = format_time_human(value2)
                             key2 = "uptime"
+                            sender_mesh_uptime = value2
 
                         text += f"  • {key2}: {value2}\n"
                 except:
@@ -298,7 +300,7 @@ def format_message(payload):
                 recipient_mesh = value
 
 
-    return sender_mqtt, channel, text, sender_mesh, recipient_mesh
+    return sender_mqtt, channel, text, sender_mesh, recipient_mesh, sender_mesh_uptime
 
 
 # Function to calculate the color of the circle based on message age
@@ -401,7 +403,8 @@ def format_node_list_and_times(unique_nodes):
     nodes_list = []
     for sender, timestamp in sorted_nodes_list.items():
         received_time_str, circle_color, time_ago_str = format_timestamp(timestamp)
-        nodes_list.append([f"{colored(sender, circle_color)}", f"{colored('●', circle_color)}", f"{time_ago_str}"])
+        color = COLOR_MAP.get(sender, "white")
+        nodes_list.append([f"{colored(sender, color)}", f"{colored('●', circle_color)}", f"{time_ago_str}"])
 
 
     return tabulate(nodes_list, tablefmt="plain")
@@ -427,6 +430,7 @@ def display_data():
     table_data = []
     unique_nodes_mqtt = {}
     unique_nodes_mesh = {}
+    unique_nodes_mesh_uptime = {}
     node_details = []
 
     headers = ["MQTT nodes", "Mesh nodes", "Type, channel", "Last Message", "Received"]
@@ -472,10 +476,11 @@ def display_data():
                 else:
                     circle_color, time_ago_str, received_time_str = ("black", "unk", "unk")
 
-                sender_mqtt, channel, formatted_message, sender_mesh, recipient_mesh = format_message(content)
+                sender_mqtt, channel, formatted_message, sender_mesh, recipient_mesh, sender_mesh_uptime = format_message(content)
 
                 # if the message is newer than the one in database - replace it
                 unique_nodes_mesh[sender_mesh] = min(unique_nodes_mesh.get(sender_mesh, float('inf')), received_timestamp2)
+                unique_nodes_mesh_uptime[sender_mesh] = sender_mesh_uptime
 
 
                 column1 = f"{colored(sender_mqtt, color)}\n    🡇\n{colored(recipient_mqtt, color)}"
@@ -488,9 +493,9 @@ def display_data():
     # Print detailed table
     column1 = tabulate(table_data, headers=headers, tablefmt="simple_grid")
 
-    column2 =  f"MQTT Topic: {MQTT_TOPIC} | Broker: {MQTT_BROKER}:{MQTT_PORT} | {last_update_msg}\n"
-    column2 += f"MQTT nodes:\n" + format_node_list_and_times(unique_nodes_mqtt) + "\n\n"
-    column2 += f"Mesh nodes:\n" + format_node_list_and_times(unique_nodes_mesh) + "\n\n"
+    column2 =  f"MQTT Topic: {MQTT_TOPIC}\nBroker: {MQTT_BROKER}:{MQTT_PORT}\n{last_update_msg}\n"
+    column2 += f"{colored('MQTT nodes:', 'white', 'on_dark_grey')}\n" + format_node_list_and_times(unique_nodes_mqtt) + "\n\n"
+    column2 += f"{colored('Mesh nodes:', 'white', 'on_dark_grey')}\n" + format_node_list_and_times(unique_nodes_mesh) + "\n\n"
     column2 += f"Node database contains {len(ALIAS_MAP_WITH_NEW)} records."
 
     print(tabulate([[column1, column2]], tablefmt="plain"))
