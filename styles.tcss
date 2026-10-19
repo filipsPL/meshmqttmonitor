@@ -1,0 +1,122 @@
+#main_container {
+    layout: grid;
+    grid-size: 3 3;
+    grid-rows: 1fr 0.6fr 3fr;  /* Increased height for the sparkline row */
+    grid-gutter: 1 1;
+    height: 100%;
+}
+
+#left_panel {
+    column-span: 1;
+    row-span: 1;
+    height: 100%;
+    overflow-y: auto;
+}
+
+#center_panel {
+    column-span: 1;
+    row-span: 1;
+    height: 100%;
+    overflow-y: auto;
+}
+
+#right_panel {
+    column-span: 1;
+    row-span: 1;
+    height: 100%;
+    overflow-y: auto;
+}
+
+#sparkline_row {
+    column-span: 3;
+    row-span: 1;
+
+}
+
+#messages_panel {
+    column-span: 3;
+    row-span: 1;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.node_list {
+    height: 100%;
+    margin-bottom: 1;
+}
+
+#connection_status {
+    height: 2;
+    dock: top;
+}
+
+DebugWidget {
+    height: 100%;
+}
+
+#debug_output {
+    background: #000000;
+    color: #00ff00;
+    height: 1fr;
+    padding: 0 1;
+}
+
+#rate_stats {
+    text-align: left;
+    margin: 0 0;
+}
+
+#chart_container {
+    background:rgb(12, 12, 12);
+    border: solid gray;
+    margin: 0 0 0 0;
+}
+LinksScreen {
+    align: center middle;
+}
+
+#links_table {
+    width: 90%;
+    height: 80%;
+    background: $surface;
+    border: solid gray;
+}
+
+NodeDetailScreen, ChatScreen {
+    align: center middle;
+}
+
+#detail_box {
+    width: 90%;
+    height: 95%;
+    background: $surface;
+    border: solid gray;
+    padding: 0 1;
+    overflow-y: auto;
+}
+
+#detail_box Sparkline {
+    height: 2;
+    margin: 0 0 1 0;
+}
+
+#detail_messages {
+    height: 1fr;
+    min-height: 6;
+}
+
+#chat_log {
+    width: 90%;
+    height: 90%;
+    background: $surface;
+    border: solid gray;
+}
+
+#search_box {
+    height: 3;
+    display: none;
+}
+
+#search_box.visible {
+    display: block;
+}

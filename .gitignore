@@ -1,2 +1,11 @@
 __pycache__/
-config.py
+config*.py
+!config.example.py
+nodes_db.pkl
+nodes_db/*.pkl*
+nodes_db/nodes.json
+*.tmp
+
+mesh_log.sqlite*
+positions_*.gpx
+CZYTAJ.txt

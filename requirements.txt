@@ -1,0 +1,4 @@
+textual>=0.80
+paho-mqtt>=2.0
+meshtastic>=2.5
+cryptography

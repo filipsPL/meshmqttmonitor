@@ -1,89 +1,69 @@
-# MQTT Node Monitor for Meshtastic
+# Meshtastic MQTT console monitor
 
-## Overview
+A [Textual](https://textual.textualize.io/) TUI that watches a Meshtastic MQTT broker: the JSON feed plus the binary protobuf topics (encrypted `/e/` packets and `/map/` reports). This is a complete new rewrite of the oryginal code.
 
-This program connects to an MQTT broker to monitor messages from [Meshtastic](https://meshtastic.org/) nodes. It displays the data in a terminal-based interface, providing both a summary of the last message from each node and a detailed table of all messages. The program uses color-coded dots to indicate the age of the last message, making it easy to see the freshness of the data at a glance.
+![screenshot](obrazki/obrazek-README.png)
 
-![screenshot](screenshot.png)
+## Setup
 
-## Features
-
-- **Real-time Monitoring**: Continuously listens to an MQTT topic and processes messages as they arrive.
-- **Alias Mapping**: Converts node IDs to human-readable names using an alias map.
-- **Message Age Indication**: Uses colored dots to indicate how recent each message is, with colors ranging from green (very recent) to black (older than 2 hours).
-- **Configurable**: All MQTT settings and node configurations are managed via a configuration file (`config.py`).
-
-## Requirements
-
-This program requires Python 3.x. You will also need to install the following Python packages:
-
-- `paho-mqtt`: For connecting to and interacting with the MQTT broker.
-- `termcolor`: For printing colored text in the terminal.
-- `tabulate`: For formatting data into a nice-looking table.
-
-### Installation of Required Packages
-
-You can install the required packages using pip:
-
-```bash
-pip install paho-mqtt termcolor tabulate
 ```
+pip install -r requirements.txt
+cp config.example.py config.py   # broker, credentials, node names
+python3 meshmqttmonitor2.py
+```
+
+Options: `--config FILE`, `--topic TOPIC` (repeatable), `--db FILE`, `--no-log`,
+`--replay LOG.sqlite [--speed N]`.
 
 ## Configuration
 
-The program relies on a configuration file (`config.py`) to specify MQTT settings, alias mappings, and color mappings. Below is an example of what your `config.py` should look like:
+Copy `config.example.py` to `config.py` (or point to another file with `--config` / `MESH_CONFIG`).
 
-```python
-# Define MQTT settings
-MQTT_BROKER = "your_mqtt_broker_address"
-MQTT_PORT = 8883
-MQTT_TOPIC = "your/mqtt/topic/#"
-MQTT_USERNAME = "your_mqtt_username"
-MQTT_PASSWORD = "your_mqtt_password"
+- **Nodes:** one line per device, friendly name and color together (color is optional):
 
-# SSL Usage
-USE_SSL = True
+  ```python
+  NODES = {
+      "!da5aced8": ("my-node-01", "#c42cf0"),
+      "!ffffffff": "everybody",
+  }
+  ```
 
-# Alias mapping for node IDs to human-readable names
-ALIAS_MAP = {
-    "!node1id": "Node 1",
-    "!node2id": "Node 2",
-    # Add more node IDs and corresponding aliases here
-}
+  The older `ALIAS_MAP` / `COLOR_MAP` pair still works; `NODES` takes precedence.
+- **Topics:** `MQTT_TOPIC` or a list in `MQTT_TOPICS` (or `--topic`). Next to a `.../json/...` topic the matching
+  `/e/` and `/map/` topics are subscribed automatically (`DECODE_PROTOBUF = False` disables this). The topic root must
+  match your nodes' root topic, e.g. `msh/PL/#` does not receive `msh/2/...`.
+- **Encrypted channels:** `CHANNEL_KEYS = {"name": "base64key=="}`; the default key (`AQ==`) is always tried.
+- Other options: `WATCH_NODES`, `LOW_BATTERY_PERCENT`, `OFFLINE_MINUTES`, `MENTION_WORDS`, `HOME_POSITION`,
+  `LOG_RETENTION_DAYS`, `NODE_RETENTION_DAYS`, `DB_PATH`, `USE_SSL`, `TLS_INSECURE`.
 
-# Color mapping for aliases
-COLOR_MAP = {
-    "Node 1": "yellow",
-    "Node 2": "cyan",
-    # Add more aliases and corresponding colors here
-}
+## Keys
 
-# Fields to ignore in the message display
-IGNORE_FIELDS = ['from', 'to', 'type', 'id', 'timestamp', 'node_id']
+| Key                   | Action                                                               |
+| --------------------- | -------------------------------------------------------------------- |
+| `Enter` on a node     | node detail: position, telemetry sparklines, links, recent messages  |
+| `/`                   | search messages (sender, type, text); `Enter` applies, `Esc` cancels |
+| `t`                   | cycle message-type filter; `x` clears filters                        |
+| `p`                   | pause / resume the message table                                     |
+| `h`                   | chat view (text messages only)                                       |
+| `n`                   | radio links (who hears whom, from neighborinfo and traceroute)       |
+| `g`                   | export node positions to a GPX file                                  |
+| `r` / `c` / `d` / `q` | reconnect / clear data / toggle debug / quit                         |
+
+## What is shown
+
+- *MQTT Nodes* lists gateways (whoever uplinked to the broker); *Mesh Nodes* lists the originators heard over radio.
+- The debug window is a scrolling log (last 500 lines).
+- Packets heard by several gateways are merged (`Via` shows the gateway and `+N` others).
+- `Hops` is `hops_away` (0 = direct), `SNR` / `RSSI` are from the best gateway.
+- Everything is logged to `mesh_log.sqlite`; the node lists, node info, telemetry and the last
+  packets are restored on restart, and a log can be replayed with `--replay`.
+- Alerts (notifications) for watched nodes: low battery and silence; optional mention words.
+
+## Tests
+
+```
+pip install pytest
+python3 -m pytest tests
 ```
 
-### Explanation of Configuration Parameters
-
-- **MQTT_BROKER**: The address of your MQTT broker.
-- **MQTT_PORT**: The port used by your MQTT broker (default for MQTT over SSL is 8883).
-- **MQTT_TOPIC**: The MQTT topic to subscribe to (wildcards can be used to subscribe to multiple topics).
-- **MQTT_USERNAME**: Your MQTT username.
-- **MQTT_PASSWORD**: Your MQTT password.
-- **USE_SSL**: Boolean value to indicate if SSL should be used.
-- **ALIAS_MAP**: A dictionary mapping node IDs to human-readable names.
-- **COLOR_MAP**: A dictionary mapping node aliases to colors for terminal display.
-- **IGNORE_FIELDS**: List of fields in the MQTT message that should be ignored in the display.
-
-## Running the Program
-
-To run the program, simply execute the Python script in your terminal:
-
-```bash
-python meshmqttmonitor.py
-```
-
-Ensure that the `config.py` file is in the same directory as your script. The file `config.py.txt` is provided as an example.
-
-## License
-
-This project is licensed under the MIT License.
+`nodes_db/fetch_liam.sh` + `nodes_db/import_nodes_liam.py` import node names from the Liam Cottle map.
